@@ -1,8 +1,10 @@
 from collections import defaultdict
 import pickle
+import datetime
 import faiss
 import os
 import numpy as np
+from utils import get_embedding
 
 class VectorStore:
     def __init__(self, dimension, index_path=None, mapping_path=None):
@@ -59,3 +61,43 @@ class VectorStore:
         faiss.write_index(self.index, self.index_path)
         with open(self.mapping_path, 'wb') as f:
             pickle.dump(self.id_to_text, f)
+    
+    def chunk_session_transcript(self, session_log):
+        """
+        Accepts a list of log entries and breaks them into summary-friendly chunks.
+        """
+        chunks = []
+        current_chunk = ""
+
+        for entry in session_log:
+            role = entry['type']
+            content = entry['content'].strip()
+            timestamp = entry['timestamp']
+            formatted = f"[{role.capitalize()} @ {timestamp}]: {content}\n"
+
+            if len(current_chunk + formatted) > 1000:  # arbitrary chunk size
+                chunks.append(current_chunk.strip())
+                current_chunk = formatted
+            else:
+                current_chunk += formatted
+
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+
+        return chunks
+
+    def store_transcript(self, session_log, session_id):
+        chunks = self.chunk_session_transcript(session_log)
+
+        for chunk in chunks:
+            entry = {
+                "content": chunk,
+                "timestamp": datetime.datetime.now().isoformat(),
+                "session_id": session_id,
+                "type": "transcript"
+            }
+            embedding = get_embedding(chunk)
+            self.add(embedding, entry)
+        
+        self.save()
+
