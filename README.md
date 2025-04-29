@@ -1,2 +1,1 @@
-# ollamabot
-Chatbot with 
+# Chatbot
